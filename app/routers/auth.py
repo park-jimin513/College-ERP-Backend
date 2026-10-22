@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+import logging
 import secrets
 import smtplib
 from email.message import EmailMessage
@@ -27,10 +28,17 @@ from app.schemas.user import (
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 bearer_scheme = HTTPBearer(auto_error=False)
+logger = logging.getLogger(__name__)
 
 LOCKOUT_ATTEMPTS = 10
 LOCKOUT_DURATION_HOURS = 24
 EMAIL_COLLATION = Collation(locale="en", strength=2)
+
+
+class MissingEmailSettingsError(RuntimeError):
+    def __init__(self, setting_names: list[str]) -> None:
+        self.setting_names = setting_names
+        super().__init__()
 
 
 def _find_user(db: Database, email: str) -> dict | None:
@@ -70,8 +78,16 @@ def get_current_user(
 
 
 def _send_otp_email(recipient: str, otp: str) -> None:
-    if not settings.EMAIL_USER or not settings.EMAIL_PASS:
-        raise RuntimeError("Email OTP is unavailable because SMTP credentials are not configured.")
+    missing_settings = [
+        name
+        for name, value in (
+            ("EMAIL_USER", settings.EMAIL_USER),
+            ("EMAIL_PASS", settings.EMAIL_PASS),
+        )
+        if not value
+    ]
+    if missing_settings:
+        raise MissingEmailSettingsError(missing_settings)
 
     message = EmailMessage()
     message["Subject"] = "College ERP OTP Verification"
@@ -98,21 +114,33 @@ def _issue_otp(user: dict, db: Database) -> AuthStatusResponse:
 
     try:
         _send_otp_email(user["email"], otp)
-    except (OSError, smtplib.SMTPException, RuntimeError) as exc:
-        collection.update_one(
-            {"_id": user["_id"]},
-            {"$set": {"otp_code": None, "otp_expires_at": None}},
+    except MissingEmailSettingsError as exc:
+        logger.error(
+            "OTP email was not sent: missing required environment variable(s): %s.",
+            ", ".join(exc.setting_names),
         )
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Could not send the verification email. Check SMTP configuration and try again.",
-        ) from exc
+        email_error = exc
+    except (OSError, smtplib.SMTPException) as exc:
+        logger.error(
+            "OTP email delivery failed while communicating with the configured SMTP server (%s).",
+            type(exc).__name__,
+        )
+        email_error = exc
+    else:
+        return AuthStatusResponse(
+            message=f"OTP sent to {user['email']} (valid for 15 minutes).",
+            status="success",
+            otp_required=True,
+        )
 
-    return AuthStatusResponse(
-        message=f"OTP sent to {user['email']} (valid for 15 minutes).",
-        status="success",
-        otp_required=True,
+    collection.update_one(
+        {"_id": user["_id"]},
+        {"$set": {"otp_code": None, "otp_expires_at": None}},
     )
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="Could not send the verification email. Check SMTP configuration and try again.",
+    ) from email_error
 
 
 def _otp_is_expired(expires_at: datetime | str) -> bool:

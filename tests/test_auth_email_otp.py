@@ -77,7 +77,9 @@ class AuthEmailOtpTests(unittest.TestCase):
 
     @patch(
         "app.routers.auth._send_otp_email",
-        side_effect=SMTPException("delivery failed"),
+        side_effect=SMTPException(
+            "delivery failed password=sensitive-test-password otp=123456"
+        ),
     )
     @patch("app.routers.auth.mongo_collection")
     def test_failed_delivery_invalidates_otp_and_does_not_return_code(
@@ -89,15 +91,66 @@ class AuthEmailOtpTests(unittest.TestCase):
         users.find_one.return_value = {"_id": "user-1", "email": "example@example.com"}
         get_collection.return_value = users
 
-        with self.assertRaises(HTTPException) as error:
-            send_otp(OTPRequest(email="example@example.com"), Mock())
+        with patch("app.routers.auth.secrets.randbelow", return_value=23456):
+            with self.assertLogs("app.routers.auth", level="ERROR") as captured_logs:
+                with self.assertRaises(HTTPException) as error:
+                    send_otp(OTPRequest(email="example@example.com"), Mock())
 
         self.assertEqual(error.exception.status_code, 503)
+        self.assertEqual(
+            error.exception.detail,
+            "Could not send the verification email. Check SMTP configuration and try again.",
+        )
         invalidation = users.update_one.call_args_list[-1].args[1]["$set"]
         self.assertIsNone(invalidation["otp_code"])
         self.assertIsNone(invalidation["otp_expires_at"])
+        log_output = "\n".join(captured_logs.output)
+        self.assertIn("SMTPException", log_output)
+        self.assertNotIn("sensitive-test-password", log_output)
+        self.assertNotIn("123456", log_output)
+        self.assertNotIn("sensitive-test-password", error.exception.detail)
+        self.assertNotIn("123456", error.exception.detail)
         send_email.assert_called_once()
         users.delete_one.assert_not_called()
+
+    @patch("app.routers.auth.mongo_collection")
+    @patch("app.routers.auth.smtplib.SMTP")
+    def test_missing_smtp_settings_are_logged_without_exposing_values(
+        self,
+        smtp: Mock,
+        get_collection: Mock,
+    ) -> None:
+        users = Mock()
+        users.find_one.return_value = {"_id": "user-1", "email": "example@example.com"}
+        get_collection.return_value = users
+
+        missing_configurations = (
+            ("", "sensitive-test-password", "EMAIL_USER"),
+            ("sender@example.com", "", "EMAIL_PASS"),
+        )
+        for email_user, email_pass, missing_setting in missing_configurations:
+            with self.subTest(missing_setting=missing_setting):
+                users.update_one.reset_mock()
+                with (
+                    patch("app.routers.auth.settings.EMAIL_USER", email_user),
+                    patch("app.routers.auth.settings.EMAIL_PASS", email_pass),
+                    patch("app.routers.auth.secrets.randbelow", return_value=23456),
+                    self.assertLogs("app.routers.auth", level="ERROR") as captured_logs,
+                ):
+                    with self.assertRaises(HTTPException) as error:
+                        send_otp(OTPRequest(email="example@example.com"), Mock())
+
+                self.assertEqual(error.exception.status_code, 503)
+                self.assertIn(missing_setting, "\n".join(captured_logs.output))
+                self.assertNotIn("sensitive-test-password", "\n".join(captured_logs.output))
+                self.assertNotIn("123456", "\n".join(captured_logs.output))
+                self.assertNotIn("sensitive-test-password", error.exception.detail)
+                self.assertNotIn("123456", error.exception.detail)
+                invalidation = users.update_one.call_args_list[-1].args[1]["$set"]
+                self.assertIsNone(invalidation["otp_code"])
+                self.assertIsNone(invalidation["otp_expires_at"])
+
+        smtp.assert_not_called()
 
     @patch("app.routers.auth.mongo_collection")
     def test_verifying_otp_marks_the_user_verified(
