@@ -1,5 +1,6 @@
 import contextlib
 import io
+import os
 import unittest
 from unittest.mock import Mock, patch
 
@@ -61,6 +62,24 @@ class MongoStartupTests(unittest.TestCase):
 
         check_connection.assert_called_once_with()
         create_indexes.assert_not_called()
+
+    @patch("app.seed.mongo_collection")
+    @patch("app.seed.ensure_indexes")
+    @patch("app.seed.check_mongodb_connection")
+    def test_seed_requires_admin_password_from_environment(
+        self,
+        check_connection: Mock,
+        create_indexes: Mock,
+        get_collection: Mock,
+    ) -> None:
+        users = get_collection.return_value
+        users.find_one.return_value = None
+
+        with patch.dict(os.environ, {"SEED_ADMIN_PASSWORD": ""}):
+            with self.assertRaisesRegex(RuntimeError, "SEED_ADMIN_PASSWORD"):
+                seed_database()
+
+        users.insert_one.assert_not_called()
 
     def test_tls_handshake_failure_has_actionable_safe_guidance(self) -> None:
         message = _connection_error_help(

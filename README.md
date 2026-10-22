@@ -17,7 +17,7 @@ pip install -r requirements.txt
 ```
 
 ### 3. Configure Credentials
-Copy `.env.example` to `.env`, configure `MONGODB_URI` and `DATABASE_NAME`, set a long, random `SECRET_KEY`, and configure `EMAIL_USER` and `EMAIL_PASS` with a Gmail address and Google App Password. The private `.env` file stores the MongoDB URI, SMTP credentials, JWT secret, and CORS settings. It is ignored by Git.
+Copy `.env.example` to `.env`, configure `MONGODB_URI` and `DATABASE_NAME`, set a long, random `SECRET_KEY`, and configure `EMAIL_USER` and `EMAIL_PASS` with a Gmail address and Google App Password. The private `.env` file stores the MongoDB URI, SMTP credentials, JWT secret, and CORS settings. It is ignored by Git. The application reads these settings from environment variables (and the local `.env` file for development); configure them as environment variables in Render rather than committing credentials.
 
 All application data, including users and OTP state, is stored directly in MongoDB. The backend fails to start if MongoDB is not configured or reachable.
 
@@ -57,10 +57,41 @@ The importer opens the legacy file read-only, adds records that are missing in M
 ```bash
 python run.py
 ```
-> The server will seed MongoDB with initial demo records and start listening on **`http://127.0.0.1:8000`**.
+> The server listens on **`http://localhost:8000`** by default. It reads `PORT` when set and binds to `0.0.0.0`.
 > Startup checks the connection before creating indexes or inserting seed data. If duplicate
 > user emails conflict under the case-insensitive unique index, resolve the reported
 > (masked) conflicts in MongoDB and rerun initialization; no user data is deleted.
+
+Demo data is not seeded automatically. To seed it intentionally, set
+`SEED_DATABASE=true` and provide `SEED_ADMIN_PASSWORD` (and optionally
+`SEED_ADMIN_EMAIL`) in the environment before running `python run.py`. Never use
+a shared or predictable password for the initial administrator.
+
+## 🚀 Deploy on Render
+
+Create a **Web Service** from the repository and use these settings:
+
+| Setting | Value |
+|---|---|
+| Root Directory | `backend` |
+| Build Command | `pip install -r requirements.txt` |
+| Start Command | `python run.py` |
+
+Add these environment variables in the Render service dashboard:
+
+- `MONGODB_URI`: MongoDB Atlas connection URI. Restrict its database user and
+  network access to the production service as appropriate.
+- `SECRET_KEY`: a unique, long random signing key. Do not reuse a development key.
+- `DATABASE_NAME`: production database name (optional; defaults to `college_erp`).
+- `CORS_ORIGINS`: JSON array of allowed frontend origins, for example
+  `["https://your-frontend.onrender.com"]`.
+- `EMAIL_USER` and `EMAIL_PASS`: configure these if the email/OTP features are
+  used.
+
+Render supplies `PORT`; `run.py` uses it automatically and binds to
+`0.0.0.0`. Do not enable `SEED_DATABASE` for normal production launches. If
+initial records are needed, seed deliberately with a unique `SEED_ADMIN_PASSWORD`
+set through the Render environment, then remove it after initialization.
 
 ---
 
@@ -71,11 +102,6 @@ Once the server is running, open:
 - **Redoc Documentation**: [http://127.0.0.1:8000/redoc](http://127.0.0.1:8000/redoc)
 
 ---
-
-## 🔑 Default Login Credentials
-- **Email**: `admin@college.edu`
-- **Password**: `admin123`
-- **OTP**: Sent to the account email address; SMTP configuration is required.
 
 ---
 
@@ -174,12 +200,12 @@ Dashboard student counts and recent-student activity exclude draft records.
 
 The backend allows the local Vite origins `http://localhost:5173`,
 `http://127.0.0.1:5173`, `http://localhost:5174`, and `http://127.0.0.1:5174`
-by default. Configure `CORS_ORIGINS` in `backend/.env` if the frontend uses a
-different origin, then restart the backend.
+by default. Configure `CORS_ORIGINS` if the frontend uses a different origin,
+then restart the backend.
 
 You can consume any API endpoint using standard `fetch()` or `axios`:
 ```javascript
-const response = await fetch('http://127.0.0.1:8000/api/students')
+const response = await fetch('http://localhost:8000/api/students')
 const students = await response.json()
 ```
 A ready-to-use frontend API client is provided in `src/services/api.js`.

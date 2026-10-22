@@ -1,3 +1,4 @@
+import os
 from datetime import datetime, timezone
 
 from pymongo.errors import DuplicateKeyError
@@ -18,12 +19,18 @@ def seed_database() -> None:
     ensure_indexes()
 
     users = mongo_collection("users")
-    if not users.find_one({"email": "admin@college.edu"}):
+    admin_email = os.getenv("SEED_ADMIN_EMAIL", "admin@college.edu")
+    if not users.find_one({"email": admin_email}):
+        admin_password = os.getenv("SEED_ADMIN_PASSWORD")
+        if not admin_password:
+            raise RuntimeError(
+                "SEED_ADMIN_PASSWORD must be set to create the initial admin user."
+            )
         admin = {
             "id": next_sequence(users.database, "users"),
             "name": "Administrator",
-            "email": "admin@college.edu",
-            "hashed_password": get_password_hash("admin123"),
+            "email": admin_email,
+            "hashed_password": get_password_hash(admin_password),
             "role": "admin",
             "is_active": True,
             "otp_code": None,
@@ -36,7 +43,7 @@ def seed_database() -> None:
         admin["_id"] = str(admin["id"])
         try:
             users.insert_one(admin)
-            print("  * Created default admin: admin@college.edu / admin123")
+            print(f"  * Created initial admin: {admin_email}")
         except DuplicateKeyError:
             print("  * Default admin already exists.")
 
