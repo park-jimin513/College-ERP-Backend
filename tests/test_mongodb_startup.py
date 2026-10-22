@@ -8,11 +8,21 @@ from pymongo.errors import ServerSelectionTimeoutError
 
 from app.core import mongo as mongo_core
 from app.core.database import get_db
-from app.core.mongo import _connection_error_help, check_mongodb_connection, ensure_indexes
+from app.core.mongo import (
+    _connection_error_help,
+    _create_local_database,
+    check_mongodb_connection,
+    ensure_indexes,
+)
 from app.seed import seed_database
 
 
 class MongoStartupTests(unittest.TestCase):
+    def test_render_does_not_fall_back_to_ephemeral_sqlite(self) -> None:
+        with patch.dict(os.environ, {"RENDER": "true"}):
+            with self.assertRaisesRegex(RuntimeError, "MONGODB_URI"):
+                _create_local_database()
+
     @patch("app.core.mongo.mongo_db")
     def test_ensure_indexes_creates_case_insensitive_unique_email_index(
         self, database: Mock

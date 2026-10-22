@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import re
 import sqlite3
 from datetime import datetime, timezone
@@ -11,6 +12,7 @@ from fastapi import HTTPException
 from pymongo import ASCENDING, DESCENDING, MongoClient, ReturnDocument
 from pymongo.collation import Collation
 from pymongo.database import Database
+from pymongo.write_concern import WriteConcern
 from pymongo.errors import (
     ConfigurationError,
     DuplicateKeyError,
@@ -324,19 +326,30 @@ class SQLiteDatabase:
         return SQLiteCollection(self, collection_name)
 
 
+def _create_local_database() -> SQLiteDatabase:
+    if os.getenv("RENDER", "").lower() == "true":
+        raise RuntimeError(
+            "MONGODB_URI must be configured on Render; local SQLite storage is not persistent."
+        )
+    return SQLiteDatabase(SQLITE_DB_PATH)
+
+
 client = None
 mongo_db: Database | SQLiteDatabase | None = None
 
-if settings.MONGODB_URI:
+if settings.MONGODB_URI.strip():
     client = MongoClient(
         settings.MONGODB_URI,
         serverSelectionTimeoutMS=10000,
         connectTimeoutMS=10000,
         tlsCAFile=certifi.where(),
     )
-    mongo_db = client[settings.DATABASE_NAME]
+    mongo_db = client.get_database(
+        settings.DATABASE_NAME,
+        write_concern=WriteConcern(w="majority"),
+    )
 else:
-    mongo_db = SQLiteDatabase(SQLITE_DB_PATH)
+    mongo_db = _create_local_database()
 
 
 def _connection_error_help(exc: PyMongoError) -> str:
@@ -509,9 +522,13 @@ def insert_document(
     if document.get("id") is not None:
         document["_id"] = str(document["id"])
     try:
-        mongo_collection(collection_name, db).insert_one(document)
+        result = mongo_collection(collection_name, db).insert_one(document)
     except DuplicateKeyError as exc:
         raise HTTPException(status_code=400, detail="Record already exists.") from exc
+    if result is None or not getattr(result, "acknowledged", True):
+        raise RuntimeError(
+            f"Database did not acknowledge inserting a record into '{collection_name}'."
+        )
     return clean_document(document) or {}
 
 

@@ -10,8 +10,40 @@ from pydantic import ValidationError
 from starlette.datastructures import Headers
 from starlette.datastructures import UploadFile as StarletteUploadFile
 
+from app.core import mongo as mongo_core
 from app.routers import students as student_routes
 from app.schemas.student import StudentCreate, StudentResponse, StudentUpdate
+
+
+class StudentPersistenceTests(unittest.TestCase):
+    @patch("app.core.mongo.mongo_collection")
+    def test_insert_document_requires_database_acknowledgement(
+        self, get_collection: Mock
+    ) -> None:
+        get_collection.return_value.insert_one.return_value.acknowledged = False
+
+        with self.assertRaisesRegex(RuntimeError, "did not acknowledge"):
+            mongo_core.insert_document(
+                Mock(),
+                "students",
+                {"id": "STU2001", "name": "Persistence Test"},
+            )
+
+    @patch("app.core.mongo.mongo_collection")
+    def test_insert_document_returns_record_after_acknowledged_insert(
+        self, get_collection: Mock
+    ) -> None:
+        get_collection.return_value.insert_one.return_value.acknowledged = True
+
+        record = mongo_core.insert_document(
+            Mock(),
+            "students",
+            {"id": "STU2002", "name": "Persistence Test"},
+        )
+
+        get_collection.return_value.insert_one.assert_called_once()
+        self.assertEqual(record["id"], "STU2002")
+        self.assertNotIn("_id", record)
 
 
 class StudentSchemaTests(unittest.TestCase):
