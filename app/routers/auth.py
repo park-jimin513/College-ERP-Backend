@@ -3,6 +3,7 @@ import hashlib
 import hmac
 import json
 import logging
+import os
 import secrets
 import smtplib
 import ssl
@@ -70,6 +71,19 @@ def _find_user(db: Database, email: str) -> dict | None:
     )
 
 
+def _email_provider() -> str:
+    provider = settings.EMAIL_PROVIDER.strip().lower()
+    if provider != "auto":
+        return provider
+    if os.getenv("RENDER", "").lower() == "true":
+        return "resend"
+    if settings.EMAIL_API_KEY and settings.EMAIL_FROM:
+        return "resend"
+    if settings.EMAIL_USER and settings.EMAIL_PASS:
+        return "smtp"
+    return "resend"
+
+
 @router.get("/me", response_model=UserResponse)
 def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
@@ -100,7 +114,7 @@ def get_current_user(
 
 
 def _send_otp_email(recipient: str, otp: str) -> None:
-    provider = settings.EMAIL_PROVIDER.strip().lower()
+    provider = _email_provider()
     message_text = (
         f"Your College ERP verification code is {otp}. "
         f"It expires in {OTP_EXPIRATION_MINUTES} minutes."
@@ -229,13 +243,13 @@ def _issue_otp(user: dict, db: Database) -> AuthStatusResponse:
     except EmailProviderDeliveryError as exc:
         logger.error(
             "OTP email delivery failed (provider=%s, HTTP status=%s).",
-            settings.EMAIL_PROVIDER.strip().lower(),
+            _email_provider(),
             exc.status_code or "unavailable",
         )
     except (OSError, smtplib.SMTPException) as exc:
         logger.error(
             "OTP email delivery failed (provider=%s, error=%s).",
-            settings.EMAIL_PROVIDER.strip().lower(),
+            _email_provider(),
             type(exc).__name__,
         )
     else:

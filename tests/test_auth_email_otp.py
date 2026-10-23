@@ -10,6 +10,7 @@ from fastapi.security import HTTPAuthorizationCredentials
 from app.routers.auth import (
     OTP_MAX_ATTEMPTS,
     EmailProviderDeliveryError,
+    _email_provider,
     _hash_otp,
     _send_otp_email,
     get_current_user,
@@ -117,6 +118,37 @@ class AuthEmailOtpTests(unittest.TestCase):
             otp_expires_at=expires_at,
             otp_attempts=attempts,
         )
+
+    def test_auto_provider_uses_gmail_smtp_for_local_settings(self) -> None:
+        with (
+            patch("app.routers.auth.settings.EMAIL_PROVIDER", "auto"),
+            patch("app.routers.auth.settings.EMAIL_API_KEY", None),
+            patch("app.routers.auth.settings.EMAIL_FROM", None),
+            patch("app.routers.auth.settings.EMAIL_USER", "sender@example.com"),
+            patch("app.routers.auth.settings.EMAIL_PASS", "test-password"),
+            patch("app.routers.auth.os.getenv", return_value=""),
+        ):
+            self.assertEqual(_email_provider(), "smtp")
+
+    def test_auto_provider_uses_resend_when_api_credentials_are_configured(self) -> None:
+        with (
+            patch("app.routers.auth.settings.EMAIL_PROVIDER", "auto"),
+            patch("app.routers.auth.settings.EMAIL_API_KEY", "test-api-key"),
+            patch("app.routers.auth.settings.EMAIL_FROM", "otp@example.com"),
+            patch("app.routers.auth.os.getenv", return_value=""),
+        ):
+            self.assertEqual(_email_provider(), "resend")
+
+    def test_auto_provider_never_uses_smtp_on_render(self) -> None:
+        with (
+            patch("app.routers.auth.settings.EMAIL_PROVIDER", "auto"),
+            patch("app.routers.auth.settings.EMAIL_API_KEY", None),
+            patch("app.routers.auth.settings.EMAIL_FROM", None),
+            patch("app.routers.auth.settings.EMAIL_USER", "sender@example.com"),
+            patch("app.routers.auth.settings.EMAIL_PASS", "test-password"),
+            patch("app.routers.auth.os.getenv", return_value="true"),
+        ):
+            self.assertEqual(_email_provider(), "resend")
 
     @patch("app.routers.auth._find_user")
     @patch("app.routers.auth.jwt.decode", return_value={"sub": "registered@example.com"})

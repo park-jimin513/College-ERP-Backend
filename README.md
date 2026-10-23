@@ -18,7 +18,10 @@ pip install -r requirements.txt
 
 ### 3. Configure Credentials
 Copy `.env.example` to `.env`, configure `MONGODB_URI` and `DATABASE_NAME`,
-set a long, random `SECRET_KEY`, and configure the Resend email API:
+and set a long, random `SECRET_KEY`. For local development, the default
+`EMAIL_PROVIDER=auto` uses Gmail SMTP when `EMAIL_USER` and `EMAIL_PASS` are
+configured, or Resend when `EMAIL_API_KEY` and `EMAIL_FROM` are configured.
+To explicitly use Resend locally, set:
 
 - `EMAIL_PROVIDER=resend`
 - `EMAIL_API_KEY`: a Resend API key with permission to send email.
@@ -34,8 +37,9 @@ local `.env` file during development).
 
 For local development only, the previous Gmail SMTP path remains available by
 setting `EMAIL_PROVIDER=smtp`, `EMAIL_USER`, and `EMAIL_PASS` (a Gmail App
-Password). Gmail SMTP is not the production default. The Resend integration
-uses HTTPS and does not require outbound SMTP ports.
+Password), or by leaving the provider at `auto` with those Gmail variables
+configured. Gmail SMTP is not used automatically on Render. The Resend
+integration uses HTTPS and does not require outbound SMTP ports.
 
 All application data, including users and OTP state, is stored directly in MongoDB. The backend fails to start if MongoDB is not configured or reachable.
 
@@ -106,7 +110,9 @@ Add these environment variables in the Render service dashboard:
 - `DATABASE_NAME`: production database name (optional; defaults to `college_erp`).
 - `CORS_ORIGINS`: JSON array of allowed frontend origins, for example
   `["https://your-frontend.onrender.com"]`.
-- `EMAIL_PROVIDER=resend`: use the HTTPS transactional email API. Render Free
+- `EMAIL_PROVIDER=resend`: use the HTTPS transactional email API. Set this
+  explicitly in Render; `auto` also selects Resend when Render sets its
+  `RENDER=true` environment marker. Render Free
   services may not use outbound SMTP ports 25, 465, or 587, so do not configure
   Gmail SMTP as the production delivery path ([Render Free instance
   limitations](https://render.com/docs/free)).
