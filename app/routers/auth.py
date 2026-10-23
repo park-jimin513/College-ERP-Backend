@@ -1,7 +1,14 @@
 from datetime import datetime, timedelta, timezone
+import hashlib
+import hmac
+import json
 import logging
 import secrets
 import smtplib
+import ssl
+from collections.abc import Callable
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 from email.message import EmailMessage
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -33,11 +40,26 @@ logger = logging.getLogger(__name__)
 LOCKOUT_ATTEMPTS = 10
 LOCKOUT_DURATION_HOURS = 24
 EMAIL_COLLATION = Collation(locale="en", strength=2)
+OTP_EXPIRATION_MINUTES = 15
+OTP_MAX_ATTEMPTS = 5
+OTP_RESEND_INTERVAL_SECONDS = 60
+RESEND_EMAILS_URL = "https://api.resend.com/emails"
+GENERIC_OTP_RESPONSE = AuthStatusResponse(
+    message="If an account exists for this email, a verification code will be sent.",
+    status="success",
+    otp_required=True,
+)
 
 
-class MissingEmailSettingsError(RuntimeError):
+class EmailProviderConfigurationError(RuntimeError):
     def __init__(self, setting_names: list[str]) -> None:
         self.setting_names = setting_names
+        super().__init__()
+
+
+class EmailProviderDeliveryError(RuntimeError):
+    def __init__(self, status_code: int | None = None) -> None:
+        self.status_code = status_code
         super().__init__()
 
 
@@ -78,69 +100,161 @@ def get_current_user(
 
 
 def _send_otp_email(recipient: str, otp: str) -> None:
-    missing_settings = [
-        name
-        for name, value in (
-            ("EMAIL_USER", settings.EMAIL_USER),
-            ("EMAIL_PASS", settings.EMAIL_PASS),
-        )
-        if not value
-    ]
-    if missing_settings:
-        raise MissingEmailSettingsError(missing_settings)
-
-    message = EmailMessage()
-    message["Subject"] = "College ERP OTP Verification"
-    message["From"] = settings.EMAIL_USER
-    message["To"] = recipient
-    message.set_content(
-        f"Your College ERP verification code is {otp}. It expires in 15 minutes."
+    provider = settings.EMAIL_PROVIDER.strip().lower()
+    message_text = (
+        f"Your College ERP verification code is {otp}. "
+        f"It expires in {OTP_EXPIRATION_MINUTES} minutes."
     )
 
-    with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=15) as smtp:
-        smtp.starttls()
-        smtp.login(settings.EMAIL_USER, settings.EMAIL_PASS)
-        smtp.send_message(message)
+    if provider == "resend":
+        missing_settings = [
+            name
+            for name, value in (
+                ("EMAIL_API_KEY", settings.EMAIL_API_KEY),
+                ("EMAIL_FROM", settings.EMAIL_FROM),
+            )
+            if not value
+        ]
+        if missing_settings:
+            raise EmailProviderConfigurationError(missing_settings)
+
+        body = json.dumps(
+            {
+                "from": settings.EMAIL_FROM,
+                "to": [recipient],
+                "subject": "College ERP OTP Verification",
+                "text": message_text,
+            }
+        ).encode("utf-8")
+        request = Request(
+            RESEND_EMAILS_URL,
+            data=body,
+            headers={
+                "Authorization": f"Bearer {settings.EMAIL_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        try:
+            with urlopen(request, timeout=10) as response:
+                if not 200 <= response.status < 300:
+                    raise EmailProviderDeliveryError(response.status)
+        except HTTPError as exc:
+            raise EmailProviderDeliveryError(exc.code) from None
+        except (OSError, TimeoutError, URLError) as exc:
+            raise EmailProviderDeliveryError() from exc
+        return
+
+    if provider == "smtp":
+        missing_settings = [
+            name
+            for name, value in (
+                ("EMAIL_USER", settings.EMAIL_USER),
+                ("EMAIL_PASS", settings.EMAIL_PASS),
+            )
+            if not value
+        ]
+        if missing_settings:
+            raise EmailProviderConfigurationError(missing_settings)
+
+        message = EmailMessage()
+        message["Subject"] = "College ERP OTP Verification"
+        message["From"] = settings.EMAIL_USER
+        message["To"] = recipient
+        message.set_content(message_text)
+
+        try:
+            if settings.SMTP_PORT == 465:
+                with smtplib.SMTP_SSL(
+                    settings.SMTP_HOST,
+                    settings.SMTP_PORT,
+                    timeout=15,
+                    context=ssl.create_default_context(),
+                ) as smtp:
+                    smtp.login(settings.EMAIL_USER, settings.EMAIL_PASS)
+                    smtp.send_message(message)
+            else:
+                with smtplib.SMTP(
+                    settings.SMTP_HOST,
+                    settings.SMTP_PORT,
+                    timeout=15,
+                ) as smtp:
+                    smtp.starttls(context=ssl.create_default_context())
+                    smtp.login(settings.EMAIL_USER, settings.EMAIL_PASS)
+                    smtp.send_message(message)
+        except (OSError, smtplib.SMTPException) as exc:
+            raise EmailProviderDeliveryError() from exc
+        return
+
+    raise EmailProviderConfigurationError(["EMAIL_PROVIDER"])
 
 
 def _issue_otp(user: dict, db: Database) -> AuthStatusResponse:
-    otp = f"{secrets.randbelow(900000) + 100000}"
-    expires_at = datetime.now(timezone.utc) + timedelta(minutes=15)
+    otp = f"{secrets.randbelow(900000) + 100000:06d}"
+    now = datetime.now(timezone.utc)
+    expires_at = now + timedelta(minutes=OTP_EXPIRATION_MINUTES)
     collection = mongo_collection("users", db)
-    collection.update_one(
-        {"_id": user["_id"]},
-        {"$set": {"otp_code": otp, "otp_expires_at": expires_at}},
+    otp_digest = _hash_otp(user["email"], otp)
+    reservation = collection.update_one(
+        {
+            "_id": user["_id"],
+            "$or": [
+                {"otp_last_sent_at": None},
+                {
+                    "otp_last_sent_at": {
+                        "$lte": now - timedelta(seconds=OTP_RESEND_INTERVAL_SECONDS)
+                    }
+                },
+            ],
+        },
+        {
+            "$set": {
+                "otp_code": otp_digest,
+                "otp_expires_at": expires_at,
+                "otp_attempts": 0,
+                "otp_last_sent_at": now,
+            }
+        },
     )
+    if not reservation.matched_count:
+        return GENERIC_OTP_RESPONSE
 
     try:
         _send_otp_email(user["email"], otp)
-    except MissingEmailSettingsError as exc:
+    except EmailProviderConfigurationError as exc:
         logger.error(
-            "OTP email was not sent: missing required environment variable(s): %s.",
+            "OTP email provider is not configured; missing environment variable(s): %s.",
             ", ".join(exc.setting_names),
         )
-        email_error = exc
+    except EmailProviderDeliveryError as exc:
+        logger.error(
+            "OTP email delivery failed (provider=%s, HTTP status=%s).",
+            settings.EMAIL_PROVIDER.strip().lower(),
+            exc.status_code or "unavailable",
+        )
     except (OSError, smtplib.SMTPException) as exc:
         logger.error(
-            "OTP email delivery failed while communicating with the configured SMTP server (%s).",
+            "OTP email delivery failed (provider=%s, error=%s).",
+            settings.EMAIL_PROVIDER.strip().lower(),
             type(exc).__name__,
         )
-        email_error = exc
     else:
-        return AuthStatusResponse(
-            message=f"OTP sent to {user['email']} (valid for 15 minutes).",
-            status="success",
-            otp_required=True,
-        )
+        return GENERIC_OTP_RESPONSE
 
     collection.update_one(
-        {"_id": user["_id"]},
+        {"_id": user["_id"], "otp_code": otp_digest},
         {"$set": {"otp_code": None, "otp_expires_at": None}},
     )
     raise HTTPException(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        detail="Could not send the verification email. Check SMTP configuration and try again.",
-    ) from email_error
+        detail="Verification email delivery is temporarily unavailable. Please try again later.",
+    )
+
+
+def _hash_otp(email: str, otp: str) -> str:
+    key = settings.SECRET_KEY.encode("utf-8")
+    value = f"{email.strip().lower()}:{otp.strip()}".encode("utf-8")
+    return hmac.new(key, value, hashlib.sha256).hexdigest()
 
 
 def _otp_is_expired(expires_at: datetime | str) -> bool:
@@ -151,20 +265,62 @@ def _otp_is_expired(expires_at: datetime | str) -> bool:
     return expires_at < datetime.now(timezone.utc)
 
 
-def _validate_otp(user: dict, otp: str) -> None:
-    if not user.get("otp_code") or not user.get("otp_expires_at"):
-        raise HTTPException(status_code=400, detail="No OTP has been requested for this account.")
-    if _otp_is_expired(user["otp_expires_at"]):
-        raise HTTPException(status_code=400, detail="OTP has expired. Please request a new one.")
-    if str(user["otp_code"]).strip() != otp.strip():
-        raise HTTPException(status_code=400, detail="Invalid OTP code.")
+def _consume_otp(
+    user: dict,
+    otp: str,
+    db: Database,
+    updates: dict | Callable[[], dict],
+) -> bool:
+    stored_digest = user.get("otp_code")
+    expires_at = user.get("otp_expires_at")
+    attempts = int(user.get("otp_attempts") or 0)
+    now = datetime.now(timezone.utc)
+    if (
+        not stored_digest
+        or not expires_at
+        or _otp_is_expired(expires_at)
+        or attempts >= OTP_MAX_ATTEMPTS
+    ):
+        return False
+
+    collection = mongo_collection("users", db)
+    valid_otp = hmac.compare_digest(
+        str(stored_digest),
+        _hash_otp(user["email"], otp),
+    )
+    state_filter = {
+        "_id": user["_id"],
+        "otp_code": stored_digest,
+        "otp_expires_at": {"$gt": now},
+        "otp_attempts": {"$lt": OTP_MAX_ATTEMPTS},
+    }
+    if not valid_otp:
+        collection.update_one(state_filter, {"$inc": {"otp_attempts": 1}})
+        return False
+
+    result = collection.update_one(
+        state_filter,
+        {
+            "$set": {
+                **(updates() if callable(updates) else updates),
+                "otp_code": None,
+                "otp_expires_at": None,
+                "otp_attempts": 0,
+            }
+        },
+    )
+    return bool(result.matched_count)
+
+
+def _invalid_otp_error() -> HTTPException:
+    return HTTPException(status_code=400, detail="Invalid or expired OTP code.")
 
 
 @router.post("/send-otp", response_model=AuthStatusResponse)
 def send_otp(payload: OTPRequest, db: Database = Depends(get_db)):
     user = _find_user(db, str(payload.email))
-    if not user:
-        raise HTTPException(status_code=404, detail="User with this email not found.")
+    if not user or not user.get("is_active", True):
+        return GENERIC_OTP_RESPONSE
 
     return _issue_otp(user, db)
 
@@ -173,13 +329,10 @@ def send_otp(payload: OTPRequest, db: Database = Depends(get_db)):
 def verify_otp(payload: OTPVerify, db: Database = Depends(get_db)):
     user = _find_user(db, str(payload.email))
     if not user:
-        raise HTTPException(status_code=404, detail="User with this email not found.")
+        raise _invalid_otp_error()
 
-    _validate_otp(user, payload.otp)
-    mongo_collection("users", db).update_one(
-        {"_id": user["_id"]},
-        {"$set": {"otp_code": None, "otp_expires_at": None, "is_verified": True}},
-    )
+    if not _consume_otp(user, payload.otp, db, {"is_verified": True}):
+        raise _invalid_otp_error()
     return AuthStatusResponse(message="OTP verified successfully.", status="success")
 
 
@@ -199,6 +352,8 @@ def signup(payload: UserCreate, db: Database = Depends(get_db)):
         "is_verified": False,
         "otp_code": None,
         "otp_expires_at": None,
+        "otp_attempts": 0,
+        "otp_last_sent_at": None,
         "failed_attempts": 0,
         "locked_until": None,
         "created_at": datetime.now(timezone.utc),
@@ -269,25 +424,23 @@ def login(payload: UserLogin, db: Database = Depends(get_db)):
 def reset_password(payload: PasswordResetConfirm, db: Database = Depends(get_db)):
     user = _find_user(db, str(payload.email))
     if not user:
-        raise HTTPException(status_code=404, detail="User with this email not found.")
-    _validate_otp(user, payload.otp)
+        raise _invalid_otp_error()
 
-    if len(payload.newPassword) < 6:
-        raise HTTPException(status_code=400, detail="Password must be at least 6 characters.")
+    def password_updates() -> dict:
+        if len(payload.newPassword) < 6:
+            raise HTTPException(
+                status_code=400,
+                detail="Password must be at least 6 characters.",
+            )
+        return {
+            "hashed_password": get_password_hash(payload.newPassword),
+            "failed_attempts": 0,
+            "locked_until": None,
+            "updated_at": datetime.now(timezone.utc),
+        }
 
-    mongo_collection("users", db).update_one(
-        {"_id": user["_id"]},
-        {
-            "$set": {
-                "hashed_password": get_password_hash(payload.newPassword),
-                "failed_attempts": 0,
-                "locked_until": None,
-                "otp_code": None,
-                "otp_expires_at": None,
-                "updated_at": datetime.now(timezone.utc),
-            }
-        },
-    )
+    if not _consume_otp(user, payload.otp, db, password_updates):
+        raise _invalid_otp_error()
     return AuthStatusResponse(
         message="Password reset successfully. Please log in with your new password.",
         status="success",

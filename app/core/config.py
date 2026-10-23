@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     DATABASE_NAME: str = "college_erp"
 
     # Email
+    EMAIL_PROVIDER: str = "resend"
+    EMAIL_API_KEY: str | None = None
+    EMAIL_FROM: str | None = None
     EMAIL_USER: str | None = None
     EMAIL_PASS: str | None = None
     SMTP_HOST: str = "smtp.gmail.com"

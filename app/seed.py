@@ -35,6 +35,8 @@ def seed_database() -> None:
             "is_active": True,
             "otp_code": None,
             "otp_expires_at": None,
+            "otp_attempts": 0,
+            "otp_last_sent_at": None,
             "failed_attempts": 0,
             "locked_until": None,
             "created_at": datetime.now(timezone.utc),

@@ -17,14 +17,35 @@ pip install -r requirements.txt
 ```
 
 ### 3. Configure Credentials
-Copy `.env.example` to `.env`, configure `MONGODB_URI` and `DATABASE_NAME`, set a long, random `SECRET_KEY`, and configure `EMAIL_USER` and `EMAIL_PASS` with a Gmail address and Google App Password. The private `.env` file stores the MongoDB URI, SMTP credentials, JWT secret, and CORS settings. It is ignored by Git. The application reads these settings from environment variables (and the local `.env` file for development); configure them as environment variables in Render rather than committing credentials.
+Copy `.env.example` to `.env`, configure `MONGODB_URI` and `DATABASE_NAME`,
+set a long, random `SECRET_KEY`, and configure the Resend email API:
+
+- `EMAIL_PROVIDER=resend`
+- `EMAIL_API_KEY`: a Resend API key with permission to send email.
+- `EMAIL_FROM`: a sender address on a domain verified in Resend, for example
+  `College ERP <otp@mail.example.edu>`.
+
+Add the sender domain to Resend and publish the DNS records Resend provides
+before using the address. See Resend's [domain setup guide](https://resend.com/docs/dashboard/domains/introduction)
+and [send-email API reference](https://resend.com/docs/api-reference/emails/send-email).
+Do not use a real credential in `.env.example` or commit the private `.env` file.
+The application reads credentials from environment variables (and the private
+local `.env` file during development).
+
+For local development only, the previous Gmail SMTP path remains available by
+setting `EMAIL_PROVIDER=smtp`, `EMAIL_USER`, and `EMAIL_PASS` (a Gmail App
+Password). Gmail SMTP is not the production default. The Resend integration
+uses HTTPS and does not require outbound SMTP ports.
 
 All application data, including users and OTP state, is stored directly in MongoDB. The backend fails to start if MongoDB is not configured or reachable.
 
 New accounts must verify their email address before login. Login and password
-reset also require an emailed OTP, which expires after 15 minutes. OTPs are never
-returned by the API; if SMTP delivery fails, the request fails and the OTP is
-invalidated.
+reset also require an emailed OTP, which expires after 15 minutes. OTPs are
+stored as keyed hashes, consumed atomically after successful verification, and
+limited to five verification attempts. A recipient can request at most one code
+per minute. Send-code responses do not reveal whether an account exists. If the
+email provider is not configured or unavailable, the API returns a safe 503 and
+invalidates the code.
 
 Test the MongoDB connection independently before seeding or starting the API:
 
@@ -85,13 +106,28 @@ Add these environment variables in the Render service dashboard:
 - `DATABASE_NAME`: production database name (optional; defaults to `college_erp`).
 - `CORS_ORIGINS`: JSON array of allowed frontend origins, for example
   `["https://your-frontend.onrender.com"]`.
-- `EMAIL_USER` and `EMAIL_PASS`: configure these if the email/OTP features are
-  used.
+- `EMAIL_PROVIDER=resend`: use the HTTPS transactional email API. Render Free
+  services may not use outbound SMTP ports 25, 465, or 587, so do not configure
+  Gmail SMTP as the production delivery path ([Render Free instance
+  limitations](https://render.com/docs/free)).
+- `EMAIL_API_KEY`: the Resend API key. Store it only in the Render environment,
+  never in source control or frontend `VITE_` variables.
+- `EMAIL_FROM`: a sender identity on a domain verified in Resend. Complete the
+  domain's DNS verification before expecting production delivery.
+- `EMAIL_USER` and `EMAIL_PASS`: retained only for deployments intentionally
+  using `EMAIL_PROVIDER=smtp`; do not set `EMAIL_PROVIDER=smtp` on a Render Free
+  service.
 
 Render supplies `PORT`; `run.py` uses it automatically and binds to
 `0.0.0.0`. Do not enable `SEED_DATABASE` for normal production launches. If
 initial records are needed, seed deliberately with a unique `SEED_ADMIN_PASSWORD`
 set through the Render environment, then remove it after initialization.
+
+After configuring the service, redeploy it and check Render logs for either the
+MongoDB startup confirmation or an explicit MongoDB startup error. For an email
+failure, logs identify missing environment-variable names or the provider and
+HTTP status only; they never include OTPs, email-provider response bodies, API
+keys, or database credentials.
 
 ---
 
