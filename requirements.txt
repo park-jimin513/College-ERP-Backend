@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 fastapi>=0.110.0
 uvicorn[standard]>=0.28.0
 sqlalchemy>=2.0.28
@@ -9,7 +8,6 @@ python-jose[cryptography]>=3.3.0
 bcrypt>=4.0.0
 email-validator>=2.0.0
 httpx>=0.27.0
-=======
 annotated-doc==0.0.5
 annotated-types==0.8.0
 anyio==4.14.2
@@ -67,4 +65,3 @@ urllib3==2.7.0
 uvicorn==0.30.6
 watchfiles==1.2.0
 websockets==13.0
->>>>>>> 78179b12b85b0a3294f129846aac5471930886b9
