@@ -1,4 +1,5 @@
 from typing import List, Optional
+<<<<<<< HEAD
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
@@ -6,6 +7,14 @@ from sqlalchemy import or_
 from app.core.database import get_db
 from app.core.mongo import sync_to_mongodb
 from app.models.examination import ExamResult
+=======
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pymongo.database import Database
+
+from app.core.database import get_db
+from app.core.mongo import get_document, insert_document, list_documents, update_document
+>>>>>>> 78179b12b85b0a3294f129846aac5471930886b9
 from app.schemas.examination import ExamResultCreate, ExamResultResponse
 
 router = APIRouter(prefix="/results", tags=["Results"])
@@ -17,6 +26,7 @@ def get_results(
     department: Optional[str] = Query(None),
     semester: Optional[str] = Query(None),
     result: Optional[str] = Query(None),
+<<<<<<< HEAD
     db: Session = Depends(get_db)
 ):
     query = db.query(ExamResult)
@@ -59,3 +69,26 @@ def publish_result(payload: ExamResultCreate, db: Session = Depends(get_db)):
     db.refresh(new_result)
     sync_to_mongodb('exam_results', new_result.__dict__.copy())
     return new_result
+=======
+    db: Database = Depends(get_db),
+):
+    return list_documents(
+        db,
+        "exam_results",
+        filters={"department": department, "semester": semester, "result": result},
+        search=search,
+        search_fields=("name", "id", "department"),
+    )
+
+
+@router.post("", response_model=ExamResultResponse, status_code=status.HTTP_201_CREATED)
+def publish_result(payload: ExamResultCreate, db: Database = Depends(get_db)):
+    if not payload.id:
+        raise HTTPException(status_code=400, detail="Student ID is required.")
+
+    existing = get_document(db, "exam_results", payload.id)
+    if existing:
+        return update_document(db, "exam_results", payload.id, payload.model_dump())
+
+    return insert_document(db, "exam_results", payload.model_dump())
+>>>>>>> 78179b12b85b0a3294f129846aac5471930886b9

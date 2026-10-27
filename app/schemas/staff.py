@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 from typing import Optional
+=======
+from typing import Any, Optional
+>>>>>>> 78179b12b85b0a3294f129846aac5471930886b9
 from datetime import datetime
 from pydantic import BaseModel, ConfigDict
 
@@ -18,6 +22,10 @@ class TeachingStaffBase(BaseModel):
     workload: Optional[str] = None
     phone: Optional[str] = None
     email: Optional[str] = None
+<<<<<<< HEAD
+=======
+    documents: Optional[dict[str, Any]] = None
+>>>>>>> 78179b12b85b0a3294f129846aac5471930886b9
 
 
 class TeachingStaffCreate(TeachingStaffBase):
@@ -39,6 +47,10 @@ class TeachingStaffUpdate(BaseModel):
     workload: Optional[str] = None
     phone: Optional[str] = None
     email: Optional[str] = None
+<<<<<<< HEAD
+=======
+    documents: Optional[dict[str, Any]] = None
+>>>>>>> 78179b12b85b0a3294f129846aac5471930886b9
 
 
 class TeachingStaffResponse(TeachingStaffBase):
@@ -60,6 +72,10 @@ class NonTeachingStaffBase(BaseModel):
     phone: Optional[str] = None
     email: Optional[str] = None
     address: Optional[str] = None
+<<<<<<< HEAD
+=======
+    documents: Optional[dict[str, Any]] = None
+>>>>>>> 78179b12b85b0a3294f129846aac5471930886b9
 
 
 class NonTeachingStaffCreate(NonTeachingStaffBase):
@@ -77,9 +93,17 @@ class NonTeachingStaffUpdate(BaseModel):
     phone: Optional[str] = None
     email: Optional[str] = None
     address: Optional[str] = None
+<<<<<<< HEAD
 
 
 class NonTeachingStaffResponse(NonTeachingStaffBase):
+=======
+    documents: Optional[dict[str, Any]] = None
+
+
+class NonTeachingStaffResponse(NonTeachingStaffBase):
+    area: Optional[str] = None
+>>>>>>> 78179b12b85b0a3294f129846aac5471930886b9
     id: str
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None

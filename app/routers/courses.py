@@ -1,4 +1,5 @@
 from typing import List, Optional
+<<<<<<< HEAD
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
@@ -7,6 +8,21 @@ from app.core.database import get_db
 from app.core.mongo import sync_to_mongodb
 from app.models.academic import Course
 from app.schemas.academic import CourseCreate, CourseUpdate, CourseResponse
+=======
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pymongo.database import Database
+
+from app.core.database import get_db
+from app.core.mongo import (
+    delete_document,
+    get_document,
+    insert_document,
+    list_documents,
+    update_document,
+)
+from app.schemas.academic import CourseCreate, CourseResponse, CourseUpdate
+>>>>>>> 78179b12b85b0a3294f129846aac5471930886b9
 
 router = APIRouter(prefix="/courses", tags=["Courses"])
 
@@ -21,6 +37,7 @@ def get_courses(
     status: Optional[str] = Query(None),
     skip: int = 0,
     limit: int = 200,
+<<<<<<< HEAD
     db: Session = Depends(get_db)
 ):
     query = db.query(Course)
@@ -51,12 +68,37 @@ def get_courses(
 @router.get("/{id}", response_model=CourseResponse)
 def get_course_by_id(id: str, db: Session = Depends(get_db)):
     course = db.query(Course).filter(Course.id == id).first()
+=======
+    db: Database = Depends(get_db),
+):
+    return list_documents(
+        db,
+        "courses",
+        filters={
+            "department": department,
+            "year": year,
+            "semester": semester,
+            "type": type,
+            "status": status,
+        },
+        search=search,
+        search_fields=("name", "id", "faculty"),
+        skip=skip,
+        limit=limit,
+    )
+
+
+@router.get("/{id}", response_model=CourseResponse)
+def get_course_by_id(id: str, db: Database = Depends(get_db)):
+    course = get_document(db, "courses", id)
+>>>>>>> 78179b12b85b0a3294f129846aac5471930886b9
     if not course:
         raise HTTPException(status_code=404, detail=f"Course '{id}' not found.")
     return course
 
 
 @router.post("", response_model=CourseResponse, status_code=status.HTTP_201_CREATED)
+<<<<<<< HEAD
 def create_course(payload: CourseCreate, db: Session = Depends(get_db)):
     if not payload.id:
         raise HTTPException(status_code=400, detail="Course code / ID is required (e.g. CS101).")
@@ -85,10 +127,26 @@ def update_course(id: str, payload: CourseUpdate, db: Session = Depends(get_db))
 
     db.commit()
     db.refresh(course)
+=======
+def create_course(payload: CourseCreate, db: Database = Depends(get_db)):
+    if not payload.id:
+        raise HTTPException(status_code=400, detail="Course code / ID is required (e.g. CS101).")
+    if get_document(db, "courses", payload.id):
+        raise HTTPException(status_code=400, detail=f"Course ID '{payload.id}' already exists.")
+    return insert_document(db, "courses", payload.model_dump())
+
+
+@router.put("/{id}", response_model=CourseResponse)
+def update_course(id: str, payload: CourseUpdate, db: Database = Depends(get_db)):
+    course = update_document(db, "courses", id, payload.model_dump(exclude_unset=True))
+    if not course:
+        raise HTTPException(status_code=404, detail=f"Course '{id}' not found.")
+>>>>>>> 78179b12b85b0a3294f129846aac5471930886b9
     return course
 
 
 @router.delete("/{id}", status_code=status.HTTP_200_OK)
+<<<<<<< HEAD
 def delete_course(id: str, db: Session = Depends(get_db)):
     course = db.query(Course).filter(Course.id == id).first()
     if not course:
@@ -97,4 +155,9 @@ def delete_course(id: str, db: Session = Depends(get_db)):
     db.delete(course)
     db.commit()
     sync_to_mongodb('courses', {"id": id}, delete=True)
+=======
+def delete_course(id: str, db: Database = Depends(get_db)):
+    if not delete_document(db, "courses", id):
+        raise HTTPException(status_code=404, detail=f"Course '{id}' not found.")
+>>>>>>> 78179b12b85b0a3294f129846aac5471930886b9
     return {"message": f"Course '{id}' deleted successfully."}
