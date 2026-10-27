@@ -1,10 +1,6 @@
 # 🎓 College ERP - Python (FastAPI) Backend
 
-<<<<<<< HEAD
-A robust, modular, high-performance REST API backend built with **FastAPI**, **SQLAlchemy ORM**, **Pydantic v2**, and **SQLite/PostgreSQL**.
-=======
 A robust, modular REST API backend built with **FastAPI**, **PyMongo**, and **Pydantic v2**.
->>>>>>> 78179b12b85b0a3294f129846aac5471930886b9
 
 ---
 
@@ -21,11 +17,6 @@ pip install -r requirements.txt
 ```
 
 ### 3. Configure Credentials
-<<<<<<< HEAD
-Copy `.env.example` to `.env` and set a long, random `SECRET_KEY`. The private `.env` file stores the JWT secret, database URL, and CORS settings. It is ignored by Git.
-
-The default database is SQLite at `backend/college_erp.db`. You can replace `DATABASE_URL` in `.env` with a PostgreSQL connection string when needed.
-=======
 Copy `.env.example` to `.env`, configure `MONGODB_URI` and `DATABASE_NAME`,
 and set a long, random `SECRET_KEY`. For local development, the default
 `EMAIL_PROVIDER=auto` uses Gmail SMTP when `EMAIL_USER` and `EMAIL_PASS` are
@@ -86,15 +77,11 @@ python migrate_sqlite_to_mongodb.py
 ```
 
 The importer opens the legacy file read-only, adds records that are missing in MongoDB, and leaves existing MongoDB records unchanged. Keep the SQLite file as a backup until you confirm the imported data.
->>>>>>> 78179b12b85b0a3294f129846aac5471930886b9
 
 ### 4. Run the Server
 ```bash
 python run.py
 ```
-<<<<<<< HEAD
-> The server will automatically initialize the database, seed initial demo records, and start listening on **`http://127.0.0.1:8000`**.
-=======
 > The server listens on **`http://localhost:8000`** by default. It reads `PORT` when set and binds to `0.0.0.0`.
 > Startup checks the connection before creating indexes or inserting seed data. If duplicate
 > user emails conflict under the case-insensitive unique index, resolve the reported
@@ -147,7 +134,6 @@ MongoDB startup confirmation or an explicit MongoDB startup error. For an email
 failure, logs identify missing environment-variable names or the provider and
 HTTP status only; they never include OTPs, email-provider response bodies, API
 keys, or database credentials.
->>>>>>> 78179b12b85b0a3294f129846aac5471930886b9
 
 ---
 
@@ -159,14 +145,6 @@ Once the server is running, open:
 
 ---
 
-<<<<<<< HEAD
-## 🔑 Default Login Credentials
-- **Email**: `admin@college.edu`
-- **Password**: `admin123`
-- **Demo OTP**: Any 4-6 digit number (e.g. `1234`) or the OTP received from `/api/auth/send-otp`.
-
-=======
->>>>>>> 78179b12b85b0a3294f129846aac5471930886b9
 ---
 
 ## 🗂️ Project Architecture
@@ -176,28 +154,9 @@ backend/
 ├── app/
 │   ├── core/
 │   │   ├── config.py            # App settings, JWT, CORS & database configuration
-<<<<<<< HEAD
-│   │   ├── database.py          # SQLAlchemy engine, sessions & base model
-│   │   └── security.py          # Password hashing (bcrypt) & JWT generation
-│   ├── models/                  # SQLAlchemy ORM Models
-│   │   ├── user.py              # User authentication & lockout tracking
-│   │   ├── student.py           # Student personal, parent & academic info
-│   │   ├── staff.py             # Teaching & Non-teaching staff models
-│   │   ├── academic.py          # Departments, Courses, Academic Programs
-│   │   ├── fee.py               # Fee payments & ledger records
-│   │   ├── attendance.py        # Subject attendance percentages
-│   │   ├── examination.py       # Exams and Published Results / Grades
-│   │   ├── timetable.py         # Timetable schedules
-│   │   ├── library.py           # Books catalog & issues
-│   │   ├── hostel.py            # Hostel rooms & occupants
-│   │   ├── transport.py         # Vehicles, routes & drivers
-│   │   ├── document.py          # Document verification workflow
-│   │   └── notice.py            # Notices & target audience announcements
-=======
 │   │   ├── database.py          # MongoDB request dependency
 │   │   └── security.py          # Password hashing (bcrypt) & JWT generation
 │   ├── seed_data.py             # Initial MongoDB demo records
->>>>>>> 78179b12b85b0a3294f129846aac5471930886b9
 │   ├── schemas/                 # Pydantic validation schemas (Request/Response)
 │   ├── routers/                 # Modular API Route Controllers
 │   │   ├── auth.py              # /api/auth (login, signup, OTP, password reset)
@@ -218,14 +177,9 @@ backend/
 │   │   ├── hostel.py            # /api/hostel
 │   │   ├── transport.py         # /api/transport
 │   │   └── notices.py           # /api/notices
-<<<<<<< HEAD
-│   ├── seed.py                  # Seed script with all initial demo data
-│   └── main.py                  # Central FastAPI application & CORS
-=======
 │   ├── seed.py                  # Idempotent MongoDB seeder
 │   └── main.py                  # Central FastAPI application & CORS
 ├── migrate_sqlite_to_mongodb.py # One-time, non-destructive legacy data importer
->>>>>>> 78179b12b85b0a3294f129846aac5471930886b9
 ├── requirements.txt
 ├── run.py                       # Server runner
 └── README.md
@@ -248,11 +202,8 @@ backend/
 | **Students** | `POST /api/students` | Add new student |
 | **Students** | `GET /api/students/{id}` | Get student profile details |
 | **Students** | `PUT /api/students/{id}` | Update student record |
-<<<<<<< HEAD
-=======
 | **Students** | `POST /api/students/{id}/documents` | Upload a JPG, PNG, or PDF student document (up to 5 MB) |
 | **Students** | `GET /api/students/{id}/documents/{document_type}` | Download a stored student document |
->>>>>>> 78179b12b85b0a3294f129846aac5471930886b9
 | **Students** | `DELETE /api/students/{id}` | Remove student |
 | **Teaching Staff** | `GET /api/teaching-staff` | List faculty with department filter |
 | **Teaching Staff** | `POST /api/teaching-staff` | Add new faculty member |
@@ -274,8 +225,6 @@ backend/
 | **Notices** | `GET /api/notices` | View published campus notices |
 | **Notices** | `POST /api/notices` | Publish or schedule notice |
 
-<<<<<<< HEAD
-=======
 Student admission records persist personal, address, parent/guardian, admission,
 academic-mapping, fee, and document metadata fields in MongoDB. Uploaded file
 contents are stored in the `student_documents` GridFS bucket; supported document
@@ -287,18 +236,10 @@ collection and can be updated later; submitting changes the application status
 and requires the full admission details and declaration acknowledgements.
 Dashboard student counts and recent-student activity exclude draft records.
 
->>>>>>> 78179b12b85b0a3294f129846aac5471930886b9
 ---
 
 ## 🔗 Connecting to the React Frontend
 
-<<<<<<< HEAD
-The backend has CORS enabled for all origins (`*`) by default, including `http://localhost:5173`.
-
-You can consume any API endpoint using standard `fetch()` or `axios`:
-```javascript
-const response = await fetch('http://127.0.0.1:8000/api/students')
-=======
 The backend allows the local Vite origins `http://localhost:5173`,
 `http://127.0.0.1:5173`, `http://localhost:5174`, and `http://127.0.0.1:5174`
 by default. Configure `CORS_ORIGINS` if the frontend uses a different origin,
@@ -307,7 +248,6 @@ then restart the backend.
 You can consume any API endpoint using standard `fetch()` or `axios`:
 ```javascript
 const response = await fetch('http://localhost:8000/api/students')
->>>>>>> 78179b12b85b0a3294f129846aac5471930886b9
 const students = await response.json()
 ```
 A ready-to-use frontend API client is provided in `src/services/api.js`.

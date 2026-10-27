@@ -1,33 +1,3 @@
-<<<<<<< HEAD
-from typing import Optional
-from datetime import datetime
-from pydantic import BaseModel, ConfigDict
-
-
-class StudentBase(BaseModel):
-    name: str
-    department: str
-    batch: str
-    year: Optional[str] = "1st Year"
-    semester: Optional[str] = "Semester 1"
-    section: Optional[str] = "A"
-    gender: Optional[str] = "Male"
-    admissionType: Optional[str] = "Regular"
-    attendance: Optional[int] = 0
-    feeStatus: Optional[str] = "Pending"
-    status: Optional[str] = "Active"
-    
-    phone: Optional[str] = None
-    email: Optional[str] = None
-    dob: Optional[str] = None
-    bloodGroup: Optional[str] = None
-    address: Optional[str] = None
-    
-    father: Optional[str] = None
-    mother: Optional[str] = None
-    guardianPhone: Optional[str] = None
-    
-=======
 from datetime import datetime
 from typing import Any, Optional
 
@@ -182,14 +152,11 @@ class StudentBase(BaseModel):
     termsPolicyVersion: Optional[str] = None
     privacyPolicyVersion: Optional[str] = None
     documents: Any = Field(default_factory=dict)
->>>>>>> 78179b12b85b0a3294f129846aac5471930886b9
     totalFee: Optional[str] = "₹0"
     paidFee: Optional[str] = "₹0"
     pendingFee: Optional[str] = "₹0"
     cgpa: Optional[str] = "0.0"
 
-<<<<<<< HEAD
-=======
     model_config = ConfigDict(from_attributes=True)
 
     @field_validator("totalFee", "paidFee", "pendingFee", "cgpa", mode="before")
@@ -202,13 +169,10 @@ class StudentBase(BaseModel):
     def normalize_blank_emails(cls, value: Any) -> Any:
         return None if value == "" else value
 
->>>>>>> 78179b12b85b0a3294f129846aac5471930886b9
 
 class StudentCreate(StudentBase):
     id: Optional[str] = None
 
-<<<<<<< HEAD
-=======
     @model_validator(mode="before")
     @classmethod
     def validate_parent_guardian_details(cls, value: Any) -> Any:
@@ -218,7 +182,6 @@ class StudentCreate(StudentBase):
             )
         return value
 
->>>>>>> 78179b12b85b0a3294f129846aac5471930886b9
 
 class StudentUpdate(BaseModel):
     name: Optional[str] = None
@@ -231,17 +194,6 @@ class StudentUpdate(BaseModel):
     admissionType: Optional[str] = None
     attendance: Optional[int] = None
     feeStatus: Optional[str] = None
-<<<<<<< HEAD
-    status: Optional[str] = None
-    phone: Optional[str] = None
-    email: Optional[str] = None
-    dob: Optional[str] = None
-    bloodGroup: Optional[str] = None
-    address: Optional[str] = None
-    father: Optional[str] = None
-    mother: Optional[str] = None
-    guardianPhone: Optional[str] = None
-=======
     feePlan: Optional[str] = None
     feeDueDate: Optional[str] = None
     status: Optional[str] = None
@@ -317,14 +269,11 @@ class StudentUpdate(BaseModel):
     termsPolicyVersion: Optional[str] = None
     privacyPolicyVersion: Optional[str] = None
     documents: Optional[Any] = None
->>>>>>> 78179b12b85b0a3294f129846aac5471930886b9
     totalFee: Optional[str] = None
     paidFee: Optional[str] = None
     pendingFee: Optional[str] = None
     cgpa: Optional[str] = None
 
-<<<<<<< HEAD
-=======
     @field_validator("totalFee", "paidFee", "pendingFee", "cgpa", mode="before")
     @classmethod
     def accept_legacy_numeric_values(cls, value: Any) -> Any:
@@ -342,14 +291,8 @@ class StudentUpdate(BaseModel):
             return _validate_submission_acknowledgements(_validate_parent_guardian_details(value))
         return value
 
->>>>>>> 78179b12b85b0a3294f129846aac5471930886b9
 
 class StudentResponse(StudentBase):
     id: str
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
-<<<<<<< HEAD
-
-    model_config = ConfigDict(from_attributes=True)
-=======
->>>>>>> 78179b12b85b0a3294f129846aac5471930886b9

@@ -1,10 +1,6 @@
 from typing import Optional
 from datetime import datetime
-<<<<<<< HEAD
-from pydantic import BaseModel, ConfigDict
-=======
 from pydantic import BaseModel, ConfigDict, model_validator
->>>>>>> 78179b12b85b0a3294f129846aac5471930886b9
 
 
 class FeeRecordBase(BaseModel):
@@ -39,8 +35,6 @@ class FeeRecordResponse(FeeRecordBase):
     updated_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
-<<<<<<< HEAD
-=======
 
     @model_validator(mode="before")
     @classmethod
@@ -49,4 +43,3 @@ class FeeRecordResponse(FeeRecordBase):
             value = dict(value)
             value["name"] = value.get("studentName") or value.get("studentId") or value.get("id")
         return value
->>>>>>> 78179b12b85b0a3294f129846aac5471930886b9

@@ -17,21 +17,13 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
     
     # Database
-<<<<<<< HEAD
-    DATABASE_URL: str
-    MONGODB_URI: str | None = None
-    DATABASE_NAME: str = "college_erp"
-
-    # Email
-=======
-    MONGODB_URI: str
+    MONGODB_URI: str = ""
     DATABASE_NAME: str = "college_erp"
 
     # Email
     EMAIL_PROVIDER: str = "auto"
     EMAIL_API_KEY: str | None = None
     EMAIL_FROM: str | None = None
->>>>>>> 78179b12b85b0a3294f129846aac5471930886b9
     EMAIL_USER: str | None = None
     EMAIL_PASS: str | None = None
     SMTP_HOST: str = "smtp.gmail.com"
@@ -41,16 +33,10 @@ class Settings(BaseSettings):
     CORS_ORIGINS: List[str] = [
         "http://localhost:5173",
         "http://127.0.0.1:5173",
-<<<<<<< HEAD
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "*"
-=======
         "http://localhost:5174",
         "http://127.0.0.1:5174",
         "http://localhost:3000",
         "http://127.0.0.1:3000",
->>>>>>> 78179b12b85b0a3294f129846aac5471930886b9
     ]
     
     model_config = SettingsConfigDict(

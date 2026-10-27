@@ -4,8 +4,6 @@ __pycache__/
 *.py[cod]
 .venv/
 venv/
-<<<<<<< HEAD
-=======
 .env
 .env.*
 !.env.example
@@ -13,4 +11,3 @@ venv/
 venv/
 __pycache__/
 *.py[cod]
->>>>>>> 78179b12b85b0a3294f129846aac5471930886b9

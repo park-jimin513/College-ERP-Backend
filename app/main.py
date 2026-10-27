@@ -1,18 +1,8 @@
-<<<<<<< HEAD
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from app.core.config import settings
-from app.core.database import engine, Base
-
-# Import all models to ensure metadata registration
-import app.models
-
-# Create database tables automatically on startup
-Base.metadata.create_all(bind=engine)
-=======
 from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
 from app.core.config import settings
 from app.core.mongo import check_mongodb_connection, ensure_indexes
 
@@ -24,7 +14,6 @@ async def lifespan(_app: FastAPI):
     print(f"[MongoDB] Connected to database '{settings.DATABASE_NAME}'.")
     yield
 
->>>>>>> 78179b12b85b0a3294f129846aac5471930886b9
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -32,25 +21,15 @@ app = FastAPI(
     description="Comprehensive, modular REST API backend for the College ERP platform.",
     docs_url="/docs",
     redoc_url="/redoc",
-<<<<<<< HEAD
-    openapi_url=f"{settings.API_V1_STR}/openapi.json"
-)
-
-# CORS Setup for React / Vite Frontend
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-=======
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
     lifespan=lifespan,
 )
-
 
 # CORS Setup for React / Vite Frontend
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
->>>>>>> 78179b12b85b0a3294f129846aac5471930886b9
+
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
